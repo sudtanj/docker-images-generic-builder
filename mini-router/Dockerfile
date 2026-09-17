@@ -40,17 +40,24 @@ ARG BUILDARCH
 # `ring` (rustls' crypto backend) carries C and assembly, so building for
 # another architecture needs a C cross-compiler, not just the Rust std for
 # the target. On its own architecture Debian's gcc already provides the
-# triplet-prefixed name, so the cross package is only fetched when the
+# triplet-prefixed name, so the cross packages are only fetched when the
 # target actually differs from the build platform.
+#
+# The libc6-dev-*-cross package is listed explicitly and deliberately.
+# `gcc-aarch64-linux-gnu` only *Recommends* it, so under
+# --no-install-recommends the compiler arrives with no target headers at
+# all and ring dies on `#include <stdlib.h>` with "compilation terminated".
 RUN set -eux; \
     case "${TARGETARCH}" in \
-      amd64) target="x86_64-unknown-linux-gnu";  cc="x86_64-linux-gnu-gcc";  pkg="gcc-x86-64-linux-gnu" ;; \
-      arm64) target="aarch64-unknown-linux-gnu"; cc="aarch64-linux-gnu-gcc"; pkg="gcc-aarch64-linux-gnu" ;; \
+      amd64) target="x86_64-unknown-linux-gnu";  cc="x86_64-linux-gnu-gcc"; \
+             pkgs="gcc-x86-64-linux-gnu libc6-dev-amd64-cross" ;; \
+      arm64) target="aarch64-unknown-linux-gnu"; cc="aarch64-linux-gnu-gcc"; \
+             pkgs="gcc-aarch64-linux-gnu libc6-dev-arm64-cross" ;; \
       *) echo "unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
     if [ "${TARGETARCH}" != "${BUILDARCH}" ]; then \
       apt-get update; \
-      apt-get install -y --no-install-recommends "${pkg}"; \
+      apt-get install -y --no-install-recommends ${pkgs}; \
       rm -rf /var/lib/apt/lists/*; \
     fi; \
     rustup target add "${target}"; \
