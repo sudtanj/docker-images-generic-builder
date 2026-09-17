@@ -1,0 +1,61 @@
+services:
+  mini-router:
+    # Builds from the Dockerfile in this folder, which fetches mini-router's
+    # own source (pin MINI_ROUTER_REF to a tag for a reproducible image).
+    build:
+      context: .
+      args:
+        # Empty builds the repo's default branch. Set a tag for a
+        # reproducible image, e.g. MINI_ROUTER_REF: v0.1.0
+        MINI_ROUTER_REF: ""
+    image: mini-router
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      # Copy .env.example to .env and put at least one provider key in it.
+      - .env
+    environment:
+      # Everything below can live here instead of (or on top of) .env.
+      # mini-router has no config file: this block is the whole of it.
+      # `docker compose run --rm mini-router --help` lists every variable.
+
+      # --- Pools: one client-facing name over several provider models ------
+      # Members are tried in the order written. The first one serves; if it
+      # fails for ANY reason - rate limit, expired key, 500, a model the
+      # provider has never heard of, a refused connection - the next one
+      # does, translating dialects on the way if it has to.
+      MINI_ROUTER_POOL_FAST: openai:gpt-4o-mini,anthropic:claude-haiku-4-5
+      MINI_ROUTER_POOL_SMART: anthropic:claude-sonnet-4-5,openai:gpt-4o
+
+      # Apps with a hard-coded model name can still reach a pool.
+      MINI_ROUTER_ALIASES: gpt-3.5-turbo=fast,gpt-4o-mini=fast
+
+      # --- Access ----------------------------------------------------------
+      # Leave auth on unless nothing but you can reach the port: these keys
+      # are what stand between a stray device on the LAN and your bills.
+      MINI_ROUTER_REQUIRE_AUTH: "true"
+
+      # --- Trimming --------------------------------------------------------
+      # /metrics (Prometheus text) and /admin/upstreams (JSON) - there is no
+      # web UI in mini-router, but you can drop both routes. /healthz and
+      # /readyz always stay, so the healthcheck keeps working.
+      # MINI_ROUTER_ADMIN: "false"
+      # MINI_ROUTER_METRICS: "false"
+
+      MINI_ROUTER_LOG: info
+
+    # It idles at about 5 MB and stays there under load, so this is a fuse,
+    # not a fit. Measured on arm64 at 2 GB / 4 CPUs - an Orange Pi Zero 3's
+    # shape - in mini-router's own CI.
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+    # Nothing is written to disk, so the filesystem can be read-only.
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
