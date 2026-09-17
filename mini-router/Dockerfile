@@ -74,9 +74,9 @@ RUN set -eux; \
     cc="$(cat /tmp/cc)"; \
     upper="$(echo "${target}" | tr 'a-z-' 'A-Z_')"; \
     export "CARGO_TARGET_${upper}_LINKER=${cc}"; \
-    # The `cc` crate accepts either spelling of the target suffix; set both
-    # rather than depend on which one it happens to check first.
-    export "CC_${target}=${cc}"; \
+    # Underscores, not the dashed triple: `CC_x86_64-unknown-linux-gnu` is
+    # not a legal shell variable name and `export` rejects it outright. The
+    # `cc` crate looks up this spelling too.
     export "CC_$(echo "${target}" | tr '-' '_')=${cc}"; \
     cargo build --release --locked --target "${target}"; \
     install -m755 "target/${target}/release/mini-router" /usr/local/bin/mini-router
