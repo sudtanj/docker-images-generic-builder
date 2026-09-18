@@ -33,7 +33,20 @@ $EDITOR .env                 # at least one provider key + MINI_ROUTER_API_KEYS
 docker compose -f docker-compose.hub.yml up -d
 ```
 
-Then point your clients at it:
+That is enough to serve requests naming a real model - `gpt-4o-mini`,
+`claude-haiku-4-5`. Pools ship commented out, because a pool naming a
+provider you have no key for is a startup error rather than a shrug. Open the
+compose file's section 3 and uncomment the variant matching the keys you
+filled in:
+
+```yaml
+      MINI_ROUTER_POOL_FAST: |
+        openai:gpt-4o-mini
+        anthropic:claude-haiku-4-5
+```
+
+One name, several provider models, in priority order. Then point your clients
+at it:
 
 ```python
 from openai import OpenAI
@@ -53,7 +66,15 @@ member is healthy, and the answer is reshaped to match whichever SDK asked.
 
 There is no config file. Every setting is an environment variable, which is
 why this image mounts nothing: the `environment:` block in the compose files
-*is* the configuration. The full list:
+*is* the configuration.
+
+Both compose files are written as a full reference - every variable
+mini-router reads is in there, grouped into seven sections, with the defaults
+noted on the ones left commented. The split is secrets in `.env`, structure in
+compose: a pool can only name providers you have a key for, so it belongs
+next to the keys it depends on rather than in the file you never open.
+
+The full list is also a flag away:
 
 ```bash
 docker compose run --rm mini-router --help
@@ -71,13 +92,26 @@ The three that matter most:
 | Variable | What it does |
 |---|---|
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, ... | A provider key on its own registers that provider, with the right URL and dialect. Ten are recognised; see `.env.example`. |
-| `MINI_ROUTER_POOL_<NAME>` | `provider:model,provider:model` - one client-facing name over several provider models, tried in that order. |
-| `MINI_ROUTER_API_KEYS` | What *your* clients present. The compose files turn auth on, so set this. |
+| `MINI_ROUTER_POOL_<NAME>` | One client-facing name over several provider models, tried in the order written. Use YAML's `\|` to get a line per member (commas also work). |
+| `MINI_ROUTER_API_KEYS` | What *your* clients present - a key you invent, not a provider's. mini-router swaps it for the provider's own on the way out, so a client never holds a provider credential. The compose files refuse to start without it. |
 
 Anything not on the recognised list is spelled out with
-`MINI_ROUTER_PROVIDER_<NAME>_URL` and friends. A variable mini-router does
-not recognise is a startup error naming the variable, not a silent default -
-so a typo costs you a failed start, not a week of confusion.
+`MINI_ROUTER_PROVIDER_<NAME>_URL`, `_PROTOCOL` and `_API_KEY` - your own
+LiteLLM box, a corporate gateway, an Azure deployment. Section 2 of the
+compose file has it, keyed off `MYPROXY_*` in `.env` so all three land
+together: a provider with a URL and no protocol is a startup error, and one
+with nothing at all simply does not exist.
+
+One thing worth knowing before you write that section: **defining any
+provider explicitly switches autodetection off**, so the ten keys above stop
+registering on their own. If you want your proxy *and* the well-known
+providers, set `MINI_ROUTER_AUTODETECT: "true"`. It works that way so a stray
+`OPENAI_API_KEY` meant for some other tool cannot quietly join a pool you
+spelled out by hand.
+
+A variable mini-router does not recognise is a startup error naming the
+variable, not a silent default - so a typo costs you a failed start, not a
+week of confusion.
 
 ## What you get
 
